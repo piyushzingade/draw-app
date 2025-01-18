@@ -1,9 +1,17 @@
-import { WebSocketServer } from "ws";
+import { WebSocket, WebSocketServer } from "ws";
 import jwt from "jsonwebtoken";
-// import { JWT_SECRET } from "@repo/backend-common/config";
+import { JWT_SECRET } from "@repo/backend-common/config";
 const wss  =  new WebSocketServer({ port : 3002})
 
-wss.on("connection" , (ws ,  request) =>{
+interface User {
+    socket : WebSocket,
+    roomId :String
+}
+
+const allSocket : User[] = []
+
+
+wss.on("connection" , (ws : WebSocket ,  request) =>{
     const url = request.url;
     if(!url){
         return;
@@ -24,8 +32,38 @@ wss.on("connection" , (ws ,  request) =>{
     }
 
     ws.on("message" , (message) =>{
-        ws.send("Ping")
-    })    
+        try {
+            const data = JSON.parse(message.toString());
+            if(data.type =="join"){
+                if(data.type.roomId == ""){
+                    return;
+                }else{
+                    allSocket.push({
+                        socket: ws,
+                        roomId:data.type.roomId,
+                    })
+                    console.log("User joined the room ->" + data.type.roomId)
+                }
+            }
+
+            if(data.type =="chat"){
+                const currentUser =allSocket.find((x) => x.socket ==ws)
+
+
+                allSocket.map((e) => {
+                    if(e.roomId == currentUser?.roomId){
+                        e.socket.send(JSON.stringify({
+                            name: data.type.name,
+                            message :data.type.message  
+                        }))
+                    }
+                })
+            }
+        } catch (error) {
+            console.log(error)
+        }
+    })   
+     
 })
 
 

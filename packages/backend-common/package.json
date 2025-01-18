@@ -1,10 +1,10 @@
+
 {
   "name": "@repo/backend-common",
   "version": "1.0.0",
-  "description": "",
   "main": "index.js",
   "exports": {
-    "./config" : "./src/index.ts"
+    "./config": "./src/index.ts"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -15,7 +15,8 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "description": "",
   "dependencies": {
-    "dotenv": "^16.4.7"
+    "@types/node": "^22.10.5"
   }
 }
