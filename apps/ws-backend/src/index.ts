@@ -1,15 +1,34 @@
 import { WebSocket, WebSocketServer } from "ws";
 import jwt from "jsonwebtoken";
 import { JWT_SECRET } from "@repo/backend-common/config";
+import { prismaClient } from "@repo/db/client";
 const wss  =  new WebSocketServer({ port : 3002})
 
 interface User {
-    socket : WebSocket,
-    roomId :String
+    ws : WebSocket,
+    rooms :String[],
+    userId : String
 }
 
-const allSocket : User[] = []
+const users : User[] = []
 
+function checkUser(token : string) : string | null {
+    try {
+        const decoded = jwt.verify(token, "JWT_SECRET");
+        if (typeof decoded == "string") {
+          return null;
+        }
+        if (!decoded || !decoded.userId) {
+          return null;
+        }
+
+        return decoded.userId;
+    } catch (error) {
+        return null;
+        console.log(error)
+    }
+    return null;
+}
 
 wss.on("connection" , (ws : WebSocket ,  request) =>{
     const url = request.url;
@@ -17,47 +36,58 @@ wss.on("connection" , (ws : WebSocket ,  request) =>{
         return;
 
     }
-    const queryparams = new URLSearchParams(url);
+    const queryparams = new URLSearchParams(url.split('?')[1]);
     const token = queryparams.get("token") || "";
-    const decoded = jwt.verify(token , "JWT_SECRET");
+    
+    const userId = checkUser(token);
 
-
-    if(typeof decoded == "string"){
+    if(userId == null ){
         ws.close();
-        return;
+        return null;
     }
-    if(!decoded || !decoded.userId){
-        ws.close(4001 , "Invalid token");
-        return;
-    }
-
-    ws.on("message" , (message) =>{
+    ws.on("message" , async (message) =>{
         try {
-            const data = JSON.parse(message.toString());
-            if(data.type =="join"){
-                if(data.type.roomId == ""){
+            const parsedData = JSON.parse(message as unknown as string);
+            
+            if(parsedData.type == "join"){
+                const user = users.find( (x) => x.ws=== ws)
+                if(!user){
                     return;
-                }else{
-                    allSocket.push({
-                        socket: ws,
-                        roomId:data.type.roomId,
-                    })
-                    console.log("User joined the room ->" + data.type.roomId)
                 }
+                user.rooms.push(parsedData.roomId);
             }
 
-            if(data.type =="chat"){
-                const currentUser =allSocket.find((x) => x.socket ==ws)
+            if(parsedData.type ==="leave"){
+                const user = users.find((x) => x.ws == ws)
+                if(!user){
+                    return;
+                }
+                user.rooms = user?.rooms.filter((x) => x === parsedData.room)
+            }
 
 
-                allSocket.map((e) => {
-                    if(e.roomId == currentUser?.roomId){
-                        e.socket.send(JSON.stringify({
-                            name: data.type.name,
-                            message :data.type.message  
-                        }))
+            if(parsedData.type === "chat"){
+                const roomId = parsedData.roomId;
+                const message = parsedData.message;
+
+                await prismaClient.chat.create({
+                    data:{
+                        roomId,
+                        userId,
+                        message
                     }
                 })
+
+                users.forEach((user) => {
+                    if(user.rooms.includes(roomId)){
+                        user.ws.send(JSON.stringify({
+                            type :"chat",
+                            message : message,
+                            roomId
+                        }))
+                    }
+                }) 
+
             }
         } catch (error) {
             console.log(error)
