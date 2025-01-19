@@ -29,7 +29,7 @@ function checkUser(token: string): string | null {
   } catch (e) {
     return null;
   }
-  return null;
+  
 }
 
 wss.on("connection", function connection(ws, request) {
